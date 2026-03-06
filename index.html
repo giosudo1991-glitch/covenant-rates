@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="კურსი.ge">
+<title>კურსი.ge — ვალუტის კურსი</title>
+<link rel="manifest" href="/manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --card: #1c2230;
+  --border: #253047;
+  --gold: #c9a84c;
+  --gold2: #f0c96b;
+  --text: #e8edf5;
+  --muted: #6b7a99;
+  --green: #3fb950;
+  --red: #f85149;
+  --blue: #4a9eff;
+  --safe: env(safe-area-inset-bottom, 0px);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* subtle grid */
+body::before {
+  content:'';
+  position:fixed; inset:0;
+  background-image:
+    linear-gradient(rgba(201,168,76,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(201,168,76,0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events:none; z-index:0;
+}
+
+.wrap { position:relative; z-index:1; max-width:900px; margin:0 auto; padding:0 16px calc(80px + var(--safe)); }
+
+/* ── HEADER ── */
+header {
+  padding: 24px 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  gap: 12px;
+}
+
+.brand { display:flex; align-items:center; gap:10px; }
+.brand-flag { font-size:32px; line-height:1; }
+h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(20px,4vw,28px);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+h1 span { color: var(--gold); }
+
+.header-right { display:flex; align-items:center; gap:10px; }
+
+.live-badge {
+  display:flex; align-items:center; gap:6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.dot {
+  width:7px; height:7px;
+  background: var(--green);
+  border-radius:50%;
+  animation: blink 2s infinite;
+}
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.refresh-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+  display:flex; align-items:center; justify-content:center;
+}
+.refresh-btn:hover { border-color:var(--gold); color:var(--gold); }
+.refresh-btn.spinning { animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── CURRENCY TABS ── */
+.cur-scroll {
+  overflow-x: auto;
+  margin-bottom: 20px;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.cur-scroll::-webkit-scrollbar { display:none; }
+
+.cur-tabs {
+  display: flex;
+  gap: 8px;
+  width: max-content;
+}
+
+.ctab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  transition: all 0.15s;
+  min-width: 64px;
+}
+.ctab .cf { font-size:18px; }
+.ctab:hover { border-color:var(--gold); color:var(--text); }
+.ctab.active {
+  background: linear-gradient(135deg, rgba(201,168,76,0.2), rgba(201,168,76,0.05));
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* ── BEST RATES ── */
+.best-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.best-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+.best-card::before {
+  content:'';
+  position:absolute; top:0; left:0; right:0; height:2px;
+}
+.best-card.buy::before { background: var(--green); }
+.best-card.sell::before { background: var(--red); }
+
+.best-lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 6px;
+  font-weight: 700;
+}
+
+.best-val {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(22px,4vw,30px);
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 3px;
+}
+.best-card.buy  .best-val { color: var(--green); }
+.best-card.sell .best-val { color: var(--red); }
+
+.best-bank { font-size:11px; color:var(--muted); }
+
+/* ── FILTER BAR ── */
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  padding: 6px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+.filter-btn:hover { border-color:var(--gold); color:var(--text); }
+.filter-btn.active { background:var(--gold); border-color:var(--gold); color:#000; }
+
+/* ── TABLE ── */
+.table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+table { width:100%; border-collapse:collapse; }
+
+thead th {
+  background: var(--card);
+  padding: 11px 14px;
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: 'DM Mono', monospace;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+tbody tr {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.12s;
+  animation: rowIn 0.3s ease forwards;
+  opacity: 0;
+}
+@keyframes rowIn { to { opacity:1; } }
+
+tbody tr:last-child { border-bottom:none; }
+tbody tr:hover { background:rgba(255,255,255,0.03); }
+tbody tr.row-official { background:rgba(201,168,76,0.04); }
+
+tbody td {
+  padding: 12px 14px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.td-source {
+  display:flex; align-items:center; gap:9px;
+}
+
+.chip {
+  width:34px; height:34px;
+  border-radius:9px;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'DM Mono',monospace;
+  font-size:8px; font-weight:700;
+  flex-shrink:0; letter-spacing:0.02em;
+}
+
+.src-name { font-weight:600; font-size:13px; }
+.src-cat {
+  font-size:10px; color:var(--muted);
+  margin-top:1px;
+}
+
+.td-buy  { color:var(--green); font-family:'DM Mono',monospace; font-size:15px; font-weight:500; }
+.td-sell { color:var(--red);   font-family:'DM Mono',monospace; font-size:15px; font-weight:500; }
+.td-official { color:var(--gold); font-family:'DM Mono',monospace; font-size:15px; font-weight:500; }
+.td-spread   { color:var(--muted); font-family:'DM Mono',monospace; font-size:13px; }
+
+.badge {
+  display:inline-block;
+  font-size:9px; padding:2px 6px;
+  border-radius:4px; font-weight:700;
+  letter-spacing:0.04em; margin-left:5px;
+  vertical-align:middle;
+}
+.b-best-buy  { background:rgba(63,185,80,0.15); color:var(--green); }
+.b-best-sell { background:rgba(248,81,73,0.15); color:var(--red); }
+.b-official  { background:rgba(201,168,76,0.2); color:var(--gold); }
+.b-exchange  { background:rgba(74,158,255,0.15); color:var(--blue); }
+
+/* ── LOADING / ERROR ── */
+.loading-row td { text-align:center; padding:40px; color:var(--muted); }
+.spinner-inline {
+  display:inline-block; width:18px; height:18px;
+  border:2px solid var(--border); border-top-color:var(--gold);
+  border-radius:50%; animation:spin 0.7s linear infinite;
+  vertical-align:middle; margin-right:8px;
+}
+
+.error-msg {
+  background:rgba(248,81,73,0.08); border:1px solid rgba(248,81,73,0.2);
+  color:var(--red); border-radius:10px; padding:12px 16px;
+  font-size:13px; text-align:center; margin-bottom:16px; display:none;
+}
+
+/* ── BOTTOM NAV (mobile) ── */
+.bottom-nav {
+  position:fixed; bottom:0; left:0; right:0;
+  background:var(--surface);
+  border-top:1px solid var(--border);
+  display:flex; justify-content:space-around;
+  padding: 10px 0 calc(10px + var(--safe));
+  z-index:100;
+}
+
+.bnav-item {
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  font-size:10px; color:var(--muted); cursor:pointer;
+  padding:4px 16px; border-radius:8px; transition:all 0.15s;
+}
+.bnav-item:hover, .bnav-item.active { color:var(--gold); }
+.bnav-icon { font-size:20px; }
+
+/* ── INSTALL BANNER ── */
+.install-banner {
+  background:linear-gradient(135deg,rgba(201,168,76,0.15),rgba(74,158,255,0.1));
+  border:1px solid rgba(201,168,76,0.3);
+  border-radius:14px; padding:14px 16px;
+  margin-bottom:20px;
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; display:none;
+}
+.install-text { font-size:13px; }
+.install-text strong { color:var(--gold); }
+.install-btn {
+  background:var(--gold); color:#000;
+  border:none; border-radius:8px;
+  padding:8px 16px; font-size:13px; font-weight:700;
+  cursor:pointer; white-space:nowrap;
+}
+
+@media(max-width:600px) {
+  .best-val { font-size:22px; }
+  thead th:last-child { display:none; }
+  tbody td:last-child { display:none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <span class="brand-flag">🇬🇪</span>
+      <h1>კურსი<span>.</span>ge</h1>
+    </div>
+    <div class="header-right">
+      <div class="live-badge">
+        <div class="dot"></div>
+        <span id="updateTime">იტვირთება...</span>
+      </div>
+      <button class="refresh-btn" id="refreshBtn" onclick="loadRates(true)" title="განახლება">↻</button>
+    </div>
+  </header>
+
+  <!-- Install PWA banner -->
+  <div class="install-banner" id="installBanner">
+    <div class="install-text">📱 <strong>კურსი.ge</strong> — ტელეფონზე დაამატე მთავარ ეკრანზე!</div>
+    <button class="install-btn" id="installBtn">დამატება</button>
+  </div>
+
+  <!-- Currency tabs -->
+  <div class="cur-scroll">
+    <div class="cur-tabs" id="curTabs"></div>
+  </div>
+
+  <!-- Error -->
+  <div class="error-banner" id="errorBanner">⚠️ სერვერთან კავშირი ვერ მოხერხდა.</div>
+
+  <!-- Best rates -->
+  <div class="best-row">
+    <div class="best-card buy">
+      <div class="best-lbl">📈 ყიდვის საუკეთესო</div>
+      <div class="best-val" id="bestBuyVal">—</div>
+      <div class="best-bank" id="bestBuyBank">—</div>
+    </div>
+    <div class="best-card sell">
+      <div class="best-lbl">📉 გაყიდვის საუკეთესო</div>
+      <div class="best-val" id="bestSellVal">—</div>
+      <div class="best-bank" id="bestSellBank">—</div>
+    </div>
+  </div>
+
+  <!-- Filter -->
+  <div class="filter-bar">
+    <button class="filter-btn active" data-cat="all" onclick="setFilter(this,'all')">ყველა</button>
+    <button class="filter-btn" data-cat="bank" onclick="setFilter(this,'bank')">🏦 ბანკები</button>
+    <button class="filter-btn" data-cat="exchange" onclick="setFilter(this,'exchange')">💱 გამცვლელები</button>
+    <button class="filter-btn" data-cat="official" onclick="setFilter(this,'official')">🏛️ NBG</button>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>წყარო</th>
+          <th>ყიდვა ₾</th>
+          <th>გაყიდვა ₾</th>
+          <th>სხვაობა</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <tr class="loading-row">
+          <td colspan="4"><span class="spinner-inline"></span>კურსი იტვირთება...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- Bottom nav -->
+<nav class="bottom-nav">
+  <div class="bnav-item active">
+    <span class="bnav-icon">💱</span>კურსი
+  </div>
+  <div class="bnav-item" onclick="alert('მალე!')">
+    <span class="bnav-icon">📊</span>გრაფიკი
+  </div>
+  <div class="bnav-item" onclick="alert('მალე!')">
+    <span class="bnav-icon">🔔</span>შეტყობინება
+  </div>
+</nav>
+
+<script>
+const CURRENCIES = [
+  {code:'USD',flag:'🇺🇸'},{code:'EUR',flag:'🇪🇺'},
+  {code:'GBP',flag:'🇬🇧'},{code:'RUB',flag:'🇷🇺'},
+  {code:'TRY',flag:'🇹🇷'},{code:'CHF',flag:'🇨🇭'},
+  {code:'UAH',flag:'🇺🇦'},{code:'AED',flag:'🇦🇪'},
+];
+
+const META = {
+  nbg:      {short:'NBG', bg:'#1f1a00', color:'#c9a84c'},
+  tbc:      {short:'TBC', bg:'#001f35', color:'#00a3e0'},
+  bog:      {short:'BOG', bg:'#300000', color:'#e63946'},
+  liberty:  {short:'LBT', bg:'#2d1500', color:'#f4a261'},
+  procredit:{short:'PCB', bg:'#0a2d10', color:'#2dc653'},
+  credo:    {short:'CRD', bg:'#1e0a3d', color:'#9b5de5'},
+  basis:    {short:'BSS', bg:'#2d2800', color:'#ffd166'},
+  vtb:      {short:'VTB', bg:'#0a1535', color:'#4a9eff'},
+  space:    {short:'SPC', bg:'#0a2535', color:'#38bdf8'},
+  tbcpay:   {short:'PAY', bg:'#00253d', color:'#7dd3fc'},
+  rico:     {short:'RCO', bg:'#2d0a1f', color:'#f472b6'},
+  valuto:   {short:'VAL', bg:'#0f2d0a', color:'#86efac'},
+  lazika:   {short:'LAZ', bg:'#1a1f0a', color:'#d9f99d'},
+  kapitali: {short:'KAP', bg:'#2d1a0a', color:'#fdba74'},
+  mbs:      {short:'MBS', bg:'#0a1a2d', color:'#93c5fd'},
+};
+
+const CAT_KA = { official:'ეროვნული ბანკი', bank:'კომერციული ბანკი', exchange:'გამცვლელი' };
+
+let ratesData = null;
+let selectedCur = 'USD';
+let selectedFilter = 'all';
+
+// Build currency tabs
+const tabsEl = document.getElementById('curTabs');
+CURRENCIES.forEach(c => {
+  const btn = document.createElement('button');
+  btn.className = 'ctab' + (c.code===selectedCur ? ' active':'');
+  btn.innerHTML = `<span class="cf">${c.flag}</span>${c.code}`;
+  btn.onclick = () => {
+    selectedCur = c.code;
+    document.querySelectorAll('.ctab').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    render();
+  };
+  tabsEl.appendChild(btn);
+});
+
+function setFilter(el, cat) {
+  selectedFilter = cat;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  render();
+}
+
+async function loadRates(force=false) {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  document.getElementById('errorBanner').style.display='none';
+  try {
+    const res = await fetch(force ? '/api/refresh' : '/api/rates');
+    if(!res.ok) throw new Error();
+    ratesData = await res.json();
+    const t = ratesData.updated.slice(11,16);
+    document.getElementById('updateTime').textContent = t;
+    render();
+  } catch {
+    document.getElementById('errorBanner').style.display='block';
+    document.getElementById('updateTime').textContent = 'შეცდომა';
+  }
+  btn.classList.remove('spinning');
+}
+
+function render() {
+  if(!ratesData) return;
+  const cur = selectedCur;
+  const sources = ratesData.sources;
+
+  // collect all rates
+  const rows = [];
+  let buyVals=[], sellVals=[];
+
+  for(const [id, src] of Object.entries(sources)) {
+    const r = src.rates[cur];
+    if(!r) continue;
+    if(selectedFilter !== 'all' && src.category !== selectedFilter) continue;
+    rows.push({id, src, r});
+    if(src.category !== 'official') {
+      if(r.buy)  buyVals.push(r.buy);
+      if(r.sell) sellVals.push(r.sell);
+    }
+  }
+
+  const maxBuy  = buyVals.length  ? Math.max(...buyVals)  : null;
+  const minSell = sellVals.length ? Math.min(...sellVals) : null;
+
+  // best rates
+  if(maxBuy) {
+    const b = rows.find(x=>x.src.category!=='official' && x.r.buy===maxBuy);
+    document.getElementById('bestBuyVal').textContent  = maxBuy.toFixed(4)+' ₾';
+    document.getElementById('bestBuyBank').textContent = b ? b.src.name : '';
+  }
+  if(minSell) {
+    const b = rows.find(x=>x.src.category!=='official' && x.r.sell===minSell);
+    document.getElementById('bestSellVal').textContent  = minSell.toFixed(4)+' ₾';
+    document.getElementById('bestSellBank').textContent = b ? b.src.name : '';
+  }
+
+  // sort: official first, then by buy desc
+  rows.sort((a,b) => {
+    if(a.src.category==='official') return -1;
+    if(b.src.category==='official') return 1;
+    return (b.r.buy||0) - (a.r.buy||0);
+  });
+
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = '';
+
+  if(!rows.length) {
+    tbody.innerHTML = `<tr class="loading-row"><td colspan="4">მონაცემი ვერ მოიძებნა</td></tr>`;
+    return;
+  }
+
+  rows.forEach(({id,src,r}, i) => {
+    const meta = META[id] || {short:id.toUpperCase().slice(0,3), bg:'#1a1a2e', color:'#aaa'};
+    const isOff = src.category==='official';
+    const isExc = src.category==='exchange';
+    const isBestBuy  = !isOff && r.buy  === maxBuy;
+    const isBestSell = !isOff && r.sell === minSell;
+    const spread = (!isOff && r.buy && r.sell) ? (r.sell-r.buy).toFixed(4) : '—';
+    const val = isOff ? (r.official||r.buy) : null;
+
+    const tr = document.createElement('tr');
+    tr.style.animationDelay = (i*0.04)+'s';
+    if(isOff) tr.className='row-official';
+
+    tr.innerHTML = `
+      <td>
+        <div class="td-source">
+          <div class="chip" style="background:${meta.bg};color:${meta.color}">${meta.short}</div>
+          <div>
+            <div class="src-name">
+              ${src.name}
+              ${isOff ? '<span class="badge b-official">ოფიც.</span>' : ''}
+              ${isExc ? '<span class="badge b-exchange">გამცვლ.</span>' : ''}
+            </div>
+            <div class="src-cat">${CAT_KA[src.category]||''}</div>
+          </div>
+        </div>
+      </td>
+      <td class="${isOff?'td-official':'td-buy'}">
+        ${isOff ? (val?val.toFixed(4):'—') : (r.buy?r.buy.toFixed(4):'—')}
+        ${isBestBuy ? '<span class="badge b-best-buy">★ საუკ.</span>' : ''}
+      </td>
+      <td class="${isOff?'td-official':'td-sell'}">
+        ${isOff ? (val?val.toFixed(4):'—') : (r.sell?r.sell.toFixed(4):'—')}
+        ${isBestSell ? '<span class="badge b-best-sell">★ საუკ.</span>' : ''}
+      </td>
+      <td class="td-spread">${spread}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// PWA Install
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('installBanner').style.display='flex';
+});
+document.getElementById('installBtn').onclick = async () => {
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const {outcome} = await deferredPrompt.userChoice;
+  if(outcome==='accepted') document.getElementById('installBanner').style.display='none';
+  deferredPrompt=null;
+};
+
+// Service Worker
+if('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(()=>{});
+}
+
+// Load & auto-refresh
+loadRates();
+setInterval(()=>loadRates(), 300000);
+</script>
+</body>
+</html>
