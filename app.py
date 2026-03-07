@@ -12,7 +12,7 @@ app = Flask(__name__)
 
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept': 'application/json, text/html, */*',
     'Accept-Language': 'ka,en-US;q=0.9,en;q=0.8',
 }
 
@@ -20,6 +20,22 @@ CURRENCIES = ['USD', 'EUR', 'GBP', 'RUB', 'TRY', 'CHF', 'UAH', 'AED']
 CACHE_TTL = 300
 cache = {'data': None, 'ts': 0}
 
+BANK_IDS = {
+    'tbc':       'TBC ბანკი',
+    'bog':       'საქ. ბანკი',
+    'liberty':   'Liberty ბანკი',
+    'procredit': 'ProCredit',
+    'credo':     'Credo ბანკი',
+    'basis':     'BasisBank',
+    'vtb':       'VTB ბანკი',
+    'space':     'Space ბანკი',
+}
+
+EXCHANGE_IDS = {
+    'rico':     'Rico',
+    'valuto':   'Valuto',
+    'tbcpay':   'TBC Pay',
+}
 
 def clean(s):
     try:
@@ -27,21 +43,10 @@ def clean(s):
     except:
         return None
 
-def parse_table(html, cur_col=0, buy_col=1, sell_col=2, selector='table tr'):
-    soup = BeautifulSoup(html, 'html.parser')
-    rates = {}
-    for row in soup.select(selector):
-        cells = row.find_all(['td', 'th'])
-        if len(cells) > max(cur_col, buy_col, sell_col):
-            code = cells[cur_col].get_text(strip=True).upper()
-            code = re.sub(r'[^A-Z]', '', code)
-            if code in CURRENCIES:
-                b = clean(cells[buy_col].get_text())
-                s = clean(cells[sell_col].get_text())
-                if b and s and 0.1 < b < 100:
-                    rates[code] = {'buy': b, 'sell': s}
-    return rates
 
+# ══════════════════════════════════════════
+#  NBG — ეროვნული ბანკი (პირდაპირი API)
+# ══════════════════════════════════════════
 
 def fetch_nbg():
     try:
@@ -60,136 +65,70 @@ def fetch_nbg():
         print(f'NBG error: {e}')
         return {}
 
-def fetch_tbc():
+
+# ══════════════════════════════════════════
+#  MYRATE.GE — ყველა ბანკი და გამცვლელი
+# ══════════════════════════════════════════
+
+def fetch_myrate():
     try:
-        r = requests.get('https://old.tbcbank.ge/ExchangeRates/GetExchangeRates',
-                         headers=HEADERS, timeout=10)
-        data = r.json()
-        rates = {}
-        for item in data:
-            code = item.get('Currency', '').upper()
-            if code in CURRENCIES:
-                b = clean(item.get('Buy'))
-                s = clean(item.get('Sell'))
-                if b and s:
-                    rates[code] = {'buy': b, 'sell': s}
-        if rates:
-            return rates
+        r = requests.get('https://myrate.ge/api/v1/rates', headers=HEADERS, timeout=15)
+        if r.status_code == 200:
+            return r.json()
     except:
         pass
     try:
-        r = requests.get('https://tbcbank.ge/en/individuals/exchange-rates',
-                         headers=HEADERS, timeout=10)
-        return parse_table(r.text)
+        r = requests.get('https://myrate.ge/', headers=HEADERS, timeout=15)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        import json
+        for script in soup.find_all('script'):
+            text = script.get_text()
+            if 'rates' in text and 'USD' in text:
+                match = re.search(r'(\{.*"rates".*\})', text, re.DOTALL)
+                if match:
+                    try:
+                        return json.loads(match.group(1))
+                    except:
+                        pass
     except Exception as e:
-        print(f'TBC error: {e}')
-        return {}
+        print(f'myrate.ge error: {e}')
+    return None
 
-def fetch_bog():
+
+def fetch_kurs():
+    """kurs.ge - ალტერნატიული წყარო"""
     try:
-        r = requests.get('https://api.bog.ge/info/currency',
-                         headers=HEADERS, timeout=10)
-        data = r.json()
-        rates = {}
-        items = data if isinstance(data, list) else data.get('currencies', data.get('data', []))
-        for item in items:
-            code = item.get('code', item.get('currency', '')).upper()
-            if code in CURRENCIES:
-                b = clean(item.get('buy', item.get('buyRate')))
-                s = clean(item.get('sell', item.get('sellRate')))
-                if b and s:
-                    rates[code] = {'buy': b, 'sell': s}
-        if rates:
-            return rates
+        r = requests.get('https://kurs.ge/api/rates', headers=HEADERS, timeout=15)
+        if r.status_code == 200:
+            return r.json()
     except:
         pass
     try:
-        r = requests.get('https://bankofgeorgia.ge/en/individual/currency',
-                         headers=HEADERS, timeout=10)
-        return parse_table(r.text)
+        r = requests.get('https://kurs.ge/', headers=HEADERS, timeout=15)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        results = {}
+        tables = soup.find_all('table')
+        for table in tables:
+            rows = table.find_all('tr')
+            for row in rows:
+                cells = row.find_all(['td', 'th'])
+                if len(cells) >= 3:
+                    bank_name = cells[0].get_text(strip=True)
+                    for i, cell in enumerate(cells):
+                        text = cell.get_text(strip=True).upper()
+                        code = re.sub(r'[^A-Z]', '', text)
+                        if code in CURRENCIES and i + 2 < len(cells):
+                            b = clean(cells[i+1].get_text())
+                            s = clean(cells[i+2].get_text())
+                            if b and s and 0.1 < b < 100:
+                                if bank_name not in results:
+                                    results[bank_name] = {}
+                                results[bank_name][code] = {'buy': b, 'sell': s}
+        return results
     except Exception as e:
-        print(f'BOG error: {e}')
-        return {}
+        print(f'kurs.ge error: {e}')
+    return None
 
-def fetch_liberty():
-    try:
-        r = requests.get('https://libertybank.ge/wp-json/liberty/v1/exchange-rates',
-                         headers=HEADERS, timeout=10)
-        data = r.json()
-        rates = {}
-        items = data if isinstance(data, list) else data.get('rates', [])
-        for item in items:
-            code = item.get('currency', '').upper()
-            if code in CURRENCIES:
-                b = clean(item.get('buy'))
-                s = clean(item.get('sell'))
-                if b and s:
-                    rates[code] = {'buy': b, 'sell': s}
-        if rates:
-            return rates
-    except:
-        pass
-    try:
-        r = requests.get('https://libertybank.ge/en/exchange-rates/',
-                         headers=HEADERS, timeout=10)
-        return parse_table(r.text)
-    except Exception as e:
-        print(f'Liberty error: {e}')
-        return {}
-
-def fetch_procredit():
-    try:
-        r = requests.get('https://www.procreditbank.ge/en/exchange-rates',
-                         headers=HEADERS, timeout=10)
-        return parse_table(r.text)
-    except Exception as e:
-        print(f'ProCredit error: {e}')
-        return {}
-
-def fetch_credo():
-    try:
-        r = requests.get('https://credobank.ge/en/exchange-rates',
-                         headers=HEADERS, timeout=10)
-        return parse_table(r.text)
-    except Exception as e:
-        print(f'Credo error: {e}')
-        return {}
-
-def fetch_basis():
-    try:
-        r = requests.get('https://basisbank.ge/en/exchange-rates',
-                         headers=HEADERS, timeout=10)
-        return parse_table(r.text)
-    except Exception as e:
-        print(f'BasisBank error: {e}')
-        return {}
-
-def fetch_vtb():
-    try:
-        r = requests.get('https://vtb.com.ge/en/individuals/exchange-rates/',
-                         headers=HEADERS, timeout=10)
-        return parse_table(r.text)
-    except Exception as e:
-        print(f'VTB error: {e}')
-        return {}
-
-def fetch_space():
-    try:
-        r = requests.get('https://www.spacebank.ge/en/exchange-rate',
-                         headers=HEADERS, timeout=10)
-        return parse_table(r.text)
-    except Exception as e:
-        print(f'Space error: {e}')
-        return {}
-
-def fetch_tbcpay():
-    try:
-        r = requests.get('https://tbcpay.ge/exchange-rates',
-                         headers=HEADERS, timeout=10)
-        return parse_table(r.text)
-    except Exception as e:
-        print(f'TBCPay error: {e}')
-        return {}
 
 def fetch_rico():
     try:
@@ -232,44 +171,84 @@ def fetch_valuto():
 def fetch_lazika():
     try:
         r = requests.get('https://lazika.ge/', headers=HEADERS, timeout=10)
-        return parse_table(r.text)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        rates = {}
+        for row in soup.select('table tr'):
+            cells = row.find_all(['td', 'th'])
+            if len(cells) >= 3:
+                code = re.sub(r'[^A-Z]', '', cells[0].get_text(strip=True).upper())
+                if code in CURRENCIES:
+                    b = clean(cells[1].get_text())
+                    s = clean(cells[2].get_text())
+                    if b and s and 0.5 < b < 50:
+                        rates[code] = {'buy': b, 'sell': s}
+        return rates
     except Exception as e:
         print(f'Lazika error: {e}')
-        return {}
-
-def fetch_kapitali():
-    try:
-        r = requests.get('https://www.kapitali.ge/', headers=HEADERS, timeout=10)
-        return parse_table(r.text)
-    except Exception as e:
-        print(f'Kapitali error: {e}')
         return {}
 
 def fetch_mbs():
     try:
         r = requests.get('https://mbs.ge/', headers=HEADERS, timeout=10)
-        return parse_table(r.text)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        rates = {}
+        for row in soup.select('table tr'):
+            cells = row.find_all(['td', 'th'])
+            if len(cells) >= 3:
+                code = re.sub(r'[^A-Z]', '', cells[0].get_text(strip=True).upper())
+                if code in CURRENCIES:
+                    b = clean(cells[1].get_text())
+                    s = clean(cells[2].get_text())
+                    if b and s and 0.5 < b < 50:
+                        rates[code] = {'buy': b, 'sell': s}
+        return rates
     except Exception as e:
         print(f'MBS error: {e}')
         return {}
 
+def fetch_kapitali():
+    try:
+        r = requests.get('https://www.kapitali.ge/', headers=HEADERS, timeout=10)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        rates = {}
+        for row in soup.select('table tr'):
+            cells = row.find_all(['td', 'th'])
+            if len(cells) >= 3:
+                code = re.sub(r'[^A-Z]', '', cells[0].get_text(strip=True).upper())
+                if code in CURRENCIES:
+                    b = clean(cells[1].get_text())
+                    s = clean(cells[2].get_text())
+                    if b and s and 0.5 < b < 50:
+                        rates[code] = {'buy': b, 'sell': s}
+        return rates
+    except Exception as e:
+        print(f'Kapitali error: {e}')
+        return {}
 
-SOURCES = [
-    ('nbg',       'ეროვნული ბანკი',   'official', fetch_nbg),
-    ('tbc',       'TBC ბანკი',         'bank',     fetch_tbc),
-    ('bog',       'საქ. ბანკი',        'bank',     fetch_bog),
-    ('liberty',   'Liberty ბანკი',     'bank',     fetch_liberty),
-    ('procredit', 'ProCredit',          'bank',     fetch_procredit),
-    ('credo',     'Credo ბანკი',       'bank',     fetch_credo),
-    ('basis',     'BasisBank',          'bank',     fetch_basis),
-    ('vtb',       'VTB ბანკი',         'bank',     fetch_vtb),
-    ('space',     'Space ბანკი',       'bank',     fetch_space),
-    ('tbcpay',    'TBC Pay',            'exchange', fetch_tbcpay),
-    ('rico',      'Rico',               'exchange', fetch_rico),
-    ('valuto',    'Valuto',             'exchange', fetch_valuto),
-    ('lazika',    'ლაზიკა',            'exchange', fetch_lazika),
-    ('kapitali',  'კაპიტალი',         'exchange', fetch_kapitali),
-    ('mbs',       'MBS',                'exchange', fetch_mbs),
+
+# ══════════════════════════════════════════
+#  FETCH ALL
+# ══════════════════════════════════════════
+
+SOURCES_DIRECT = [
+    ('nbg',      'ეროვნული ბანკი',  'official', fetch_nbg),
+    ('rico',     'Rico',              'exchange', fetch_rico),
+    ('valuto',   'Valuto',            'exchange', fetch_valuto),
+    ('lazika',   'ლაზიკა',           'exchange', fetch_lazika),
+    ('mbs',      'MBS',               'exchange', fetch_mbs),
+    ('kapitali', 'კაპიტალი',        'exchange', fetch_kapitali),
+]
+
+BANK_SOURCES = [
+    ('tbc',       'TBC ბანკი',        'bank'),
+    ('bog',       'საქ. ბანკი',       'bank'),
+    ('liberty',   'Liberty ბანკი',    'bank'),
+    ('procredit', 'ProCredit',         'bank'),
+    ('credo',     'Credo ბანკი',      'bank'),
+    ('basis',     'BasisBank',         'bank'),
+    ('vtb',       'VTB ბანკი',        'bank'),
+    ('space',     'Space ბანკი',      'bank'),
+    ('tbcpay',    'TBC Pay',           'exchange'),
 ]
 
 def fetch_all():
@@ -278,20 +257,61 @@ def fetch_all():
         'updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'sources': {}
     }
-    for sid, name, category, fn in SOURCES:
+
+    # პირდაპირი წყაროები
+    for sid, name, category, fn in SOURCES_DIRECT:
         try:
             rates = fn()
             result['sources'][sid] = {
-                'name': name,
-                'category': category,
-                'rates': rates,
-                'ok': len(rates) > 0
+                'name': name, 'category': category,
+                'rates': rates, 'ok': len(rates) > 0
             }
-            status = f'✓ {len(rates)} ვალუტა' if rates else '✗ ვერ ჩაიტვირთა'
-            print(f'  {name}: {status}')
+            print(f'  {name}: {"✓" if rates else "✗"} {len(rates)} ვალუტა')
         except Exception as e:
             result['sources'][sid] = {'name': name, 'category': category, 'rates': {}, 'ok': False}
             print(f'  {name}: ✗ {e}')
+
+    # ბანკები myrate.ge-დან
+    print('  myrate.ge-დან ვტვირთავ...')
+    myrate_data = fetch_myrate()
+
+    if myrate_data:
+        print('  ✓ myrate.ge მუშაობს')
+        # myrate.ge-ს სტრუქტურა: {bank_id: {currency: {buy, sell}}}
+        for sid, name, category in BANK_SOURCES:
+            bank_data = myrate_data.get(sid, myrate_data.get(name, {}))
+            rates = {}
+            if isinstance(bank_data, dict):
+                for cur, vals in bank_data.items():
+                    code = cur.upper()
+                    if code in CURRENCIES and isinstance(vals, dict):
+                        b = clean(vals.get('buy', vals.get('rate')))
+                        s = clean(vals.get('sell'))
+                        if b and s:
+                            rates[code] = {'buy': b, 'sell': s}
+            result['sources'][sid] = {
+                'name': name, 'category': category,
+                'rates': rates, 'ok': len(rates) > 0
+            }
+            print(f'  {name}: {"✓" if rates else "✗"} {len(rates)} ვალუტა')
+    else:
+        print('  ✗ myrate.ge ვერ ჩაიტვირთა, kurs.ge ვცდი...')
+        kurs_data = fetch_kurs()
+
+        for sid, name, category in BANK_SOURCES:
+            rates = {}
+            if kurs_data and isinstance(kurs_data, dict):
+                for key, vals in kurs_data.items():
+                    if name.lower() in key.lower() or sid.lower() in key.lower():
+                        rates = vals if isinstance(vals, dict) else {}
+                        break
+            result['sources'][sid] = {
+                'name': name, 'category': category,
+                'rates': rates, 'ok': len(rates) > 0
+            }
+            print(f'  {name}: {"✓" if rates else "✗"} {len(rates)} ვალუტა')
+
+    print(f'  → დასრულდა')
     return result
 
 def get_cached():
@@ -307,6 +327,10 @@ def background_refresh():
         cache['data'] = fetch_all()
         cache['ts'] = time.time()
 
+
+# ══════════════════════════════════════════
+#  ROUTES
+# ══════════════════════════════════════════
 
 @app.route('/')
 def index():
@@ -341,9 +365,17 @@ def manifest():
 @app.route('/sw.js')
 def service_worker():
     sw = """
-const CACHE = 'kursi-v1';
+const CACHE = 'kursi-v2';
 const ASSETS = ['/'];
-self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS))));
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+  self.skipWaiting();
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys =>
+    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+  ));
+});
 self.addEventListener('fetch', e => {
   if (e.request.url.includes('/api/')) return;
   e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
