@@ -17,13 +17,9 @@ HEADERS = {
 }
 
 CURRENCIES = ['USD', 'EUR', 'GBP', 'RUB', 'TRY', 'CHF', 'UAH', 'AED']
-CACHE_TTL = 300  # 5 წუთი
+CACHE_TTL = 300
 cache = {'data': None, 'ts': 0}
 
-
-# ══════════════════════════════════════════
-#  HELPER
-# ══════════════════════════════════════════
 
 def clean(s):
     try:
@@ -42,14 +38,10 @@ def parse_table(html, cur_col=0, buy_col=1, sell_col=2, selector='table tr'):
             if code in CURRENCIES:
                 b = clean(cells[buy_col].get_text())
                 s = clean(cells[sell_col].get_text())
-                if b and s:
+                if b and s and 0.1 < b < 100:
                     rates[code] = {'buy': b, 'sell': s}
     return rates
 
-
-# ══════════════════════════════════════════
-#  BANKS
-# ══════════════════════════════════════════
 
 def fetch_nbg():
     try:
@@ -70,11 +62,63 @@ def fetch_nbg():
 
 def fetch_tbc():
     try:
-        r = requests.get('https://api.tbcbank.ge/v1/currency/exchange-rate',
+        r = requests.get('https://old.tbcbank.ge/ExchangeRates/GetExchangeRates',
                          headers=HEADERS, timeout=10)
         data = r.json()
         rates = {}
-        for item in data.get('currencies', []):
+        for item in data:
+            code = item.get('Currency', '').upper()
+            if code in CURRENCIES:
+                b = clean(item.get('Buy'))
+                s = clean(item.get('Sell'))
+                if b and s:
+                    rates[code] = {'buy': b, 'sell': s}
+        if rates:
+            return rates
+    except:
+        pass
+    try:
+        r = requests.get('https://tbcbank.ge/en/individuals/exchange-rates',
+                         headers=HEADERS, timeout=10)
+        return parse_table(r.text)
+    except Exception as e:
+        print(f'TBC error: {e}')
+        return {}
+
+def fetch_bog():
+    try:
+        r = requests.get('https://api.bog.ge/info/currency',
+                         headers=HEADERS, timeout=10)
+        data = r.json()
+        rates = {}
+        items = data if isinstance(data, list) else data.get('currencies', data.get('data', []))
+        for item in items:
+            code = item.get('code', item.get('currency', '')).upper()
+            if code in CURRENCIES:
+                b = clean(item.get('buy', item.get('buyRate')))
+                s = clean(item.get('sell', item.get('sellRate')))
+                if b and s:
+                    rates[code] = {'buy': b, 'sell': s}
+        if rates:
+            return rates
+    except:
+        pass
+    try:
+        r = requests.get('https://bankofgeorgia.ge/en/individual/currency',
+                         headers=HEADERS, timeout=10)
+        return parse_table(r.text)
+    except Exception as e:
+        print(f'BOG error: {e}')
+        return {}
+
+def fetch_liberty():
+    try:
+        r = requests.get('https://libertybank.ge/wp-json/liberty/v1/exchange-rates',
+                         headers=HEADERS, timeout=10)
+        data = r.json()
+        rates = {}
+        items = data if isinstance(data, list) else data.get('rates', [])
+        for item in items:
             code = item.get('currency', '').upper()
             if code in CURRENCIES:
                 b = clean(item.get('buy'))
@@ -86,41 +130,7 @@ def fetch_tbc():
     except:
         pass
     try:
-        r = requests.get('https://www.tbcbank.ge/web/en/web/guest/exchange-rates',
-                         headers=HEADERS, timeout=10)
-        return parse_table(r.text)
-    except Exception as e:
-        print(f'TBC error: {e}')
-        return {}
-
-def fetch_bog():
-    try:
-        r = requests.get('https://bankofgeorgia.ge/mob/en/ExchangeRates',
-                         headers=HEADERS, timeout=10)
-        data = r.json()
-        rates = {}
-        for item in data.get('Data', []):
-            code = item.get('RateName', '').upper()
-            if code in CURRENCIES:
-                b = clean(item.get('BuyRate'))
-                s = clean(item.get('SellRate'))
-                if b and s:
-                    rates[code] = {'buy': b, 'sell': s}
-        if rates:
-            return rates
-    except:
-        pass
-    try:
-        r = requests.get('https://bankofgeorgia.ge/en/personal/exchange-rates',
-                         headers=HEADERS, timeout=10)
-        return parse_table(r.text)
-    except Exception as e:
-        print(f'BOG error: {e}')
-        return {}
-
-def fetch_liberty():
-    try:
-        r = requests.get('https://libertybank.ge/en/individuals/exchange-rates/',
+        r = requests.get('https://libertybank.ge/en/exchange-rates/',
                          headers=HEADERS, timeout=10)
         return parse_table(r.text)
     except Exception as e:
@@ -180,11 +190,6 @@ def fetch_tbcpay():
     except Exception as e:
         print(f'TBCPay error: {e}')
         return {}
-
-
-# ══════════════════════════════════════════
-#  CURRENCY EXCHANGES (გამცვლელები)
-# ══════════════════════════════════════════
 
 def fetch_rico():
     try:
@@ -249,10 +254,6 @@ def fetch_mbs():
         return {}
 
 
-# ══════════════════════════════════════════
-#  FETCH ALL
-# ══════════════════════════════════════════
-
 SOURCES = [
     ('nbg',       'ეროვნული ბანკი',   'official', fetch_nbg),
     ('tbc',       'TBC ბანკი',         'bank',     fetch_tbc),
@@ -307,13 +308,9 @@ def background_refresh():
         cache['ts'] = time.time()
 
 
-# ══════════════════════════════════════════
-#  ROUTES
-# ══════════════════════════════════════════
-
 @app.route('/')
 def index():
-    return send_file('index.html')
+    return send_file(os.path.join(os.path.dirname(__file__), 'index.html'))
 
 @app.route('/api/rates')
 def api_rates():
